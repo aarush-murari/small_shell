@@ -195,8 +195,6 @@ int main(void) {
     sa.sa_flags = 0;
     sigaction(SIGINT, &sa, NULL);
     
-    char *prompt = NULL;
-    size_t prompt_cap = 0;
     struct ArgsVec *vec = NULL;
     char *arg = NULL;
     char *save = NULL;
@@ -220,35 +218,29 @@ int main(void) {
         char *line = linenoise(prompt_buf);
         if (line == NULL) {
             int status_tmp = errno;
-            if (status_tmp == EAGAIN) {  // Ctrl-C
+            if (status_tmp == EAGAIN || status_tmp == EINTR) {   // Ctrl-C, or a signal interrupted the read
+                clearerr(stdin);
                 continue;
-            } else if (status_tmp == ENOENT || status_tmp == 0) {
-                printf("\nControl D?\n");
+            } else if (status_tmp == ENOENT || feof(stdin)) {    // Ctrl-D on a tty, or EOF on a pipe/file
+                printf("Control D?\n");
                 printf("Bro, he's getting out of hand.\n");
-                status_tmp = last_status; 
+                status_tmp = last_status;
             } else {
                 fprintf(stderr, "Read error?\n");
                 fprintf(stderr, "Bro, I can't read.\n");
-                last_status = status_tmp;
             }
             valid_raw = 0;
+            last_status = status_tmp;
             break;
         }
         
-        size_t len = strcspn(prompt, "\n");
-        if (prompt[len] == '\0') {
-            clearerr(stdin); // no newline: getline stopped at EOF, so don't let it stay sticky
-        };
-        prompt[len] = '\0';
-        if (len > 0 && prompt[len - 1] == '\r') {
-            prompt[len - 1] = '\0'; // check for trailing \r in CRLF-style inputs
-        }
-
+        if (line[0] != '\0') linenoiseHistoryAdd(line);
+        
         if (!construct_argsvec(&vec)) {
             return EXIT_FAILURE;
         }
 
-        arg = strtok_r(prompt, " \t", &save);
+        arg = strtok_r(line, " \t", &save);
         while (arg != NULL) {
             if (!vec_push_back(vec, arg)) {
                 destruct_argsvec(&vec);
