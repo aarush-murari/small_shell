@@ -294,9 +294,9 @@ int main(void) {
             }
         }
         END:
+        free(line);
         destruct_argsvec(&vec);
     }
-    free(prompt);
     destruct_argsvec(&vec);
     return last_status;
 }
